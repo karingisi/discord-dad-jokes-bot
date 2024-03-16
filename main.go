@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"encoding/json"
 	"net/http"
@@ -22,28 +23,28 @@ type Joke struct {
 }
 
 // access third-party API to get a random joke
-func randomJoke() string {
+func randomJoke() (Joke, error) {
+	joke := Joke{}
 	resp, err := http.Get(JOKES_API)
 	if err != nil {
 		fmt.Println("Error accessing API:", err)
-		return ""
+		return joke, err
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println("Error reading API response:", err)
-		return ""
+		return joke, err
 	}
 
-	joke := Joke{}
 	err = json.Unmarshal(body, &joke)
 	if err != nil {
 		fmt.Println("Error parsing API response:", err)
-		return ""
+		return joke, err
 	}
 
-	return joke.Setup + " " + joke.Punchline
+	return joke, nil
 }
 
 func main() {
@@ -89,11 +90,19 @@ func messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
 
 	if m.Content == "!joke" {
 		// Send a reply message
-		joke := randomJoke()
-		_, err := s.ChannelMessageSend(m.ChannelID, joke)
+		joke, err := randomJoke()
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		m, err := s.ChannelMessageSend(m.ChannelID, joke.Setup)
 		if err != nil {
 			fmt.Println(err)
 		}
 
+		// wait for 5 seconds
+		time.Sleep(5 * time.Second)
+		s.ChannelMessageSendReply(m.ChannelID, joke.Punchline, m.Reference())
 	}
 }
